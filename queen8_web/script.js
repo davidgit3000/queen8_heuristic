@@ -13,6 +13,7 @@ class StepByStepAStar {
         this.currentRow = 0;
         this.solved = false;
         this.stuck = false;
+        this.stepCount = 0;
     }
     
     getValidColumns(state, row) {
@@ -55,6 +56,9 @@ class StepByStepAStar {
             return [this.currentState, "Search failed - no solution found", true];
         }
         
+        // Increment step counter for each algorithm iteration
+        this.stepCount++;
+        
         // If we've placed all queens, check if it's a valid solution
         if (this.currentRow >= BOARD_SIZE) {
             const h = this.attackingPairs(this.currentState);
@@ -88,7 +92,7 @@ class StepByStepAStar {
         // Place queen
         this.currentState[this.currentRow] = bestCol;
         
-        const message = `Placed queen at row ${this.currentRow}, col ${bestCol}.`;
+        const message = `Step ${this.stepCount}: Placed queen at row ${this.currentRow}, col ${bestCol}.`;
         this.currentRow += 1;
         
         return [this.currentState, message, false];
@@ -173,7 +177,7 @@ class StepByStepAStar {
                 this.currentState[prevRow] = bestCol;
                 this.currentRow = prevRow + 1;
                 
-                const message = `Backtracked to row ${prevRow}, trying col ${bestCol}.`;
+                const message = `Step ${this.stepCount}: Backtracked to row ${prevRow}, trying col ${bestCol}.`;
                 return [this.currentState, message, false];
             }
         }
@@ -183,6 +187,7 @@ class StepByStepAStar {
         return [this.currentState, "Search failed - no solution exists", true];
     }
     
+    // Heuristic function to count attacking pairs
     attackingPairs(state) {
         const rows = [];
         const cols = [];
@@ -228,6 +233,7 @@ class EightQueensGUI {
         this.drawBoard();
         this.updateSidePanel();
         this.updateHeuristicDisplay();
+        this.updateStepCounter();
         this.updateMessage("Click 'Start' to begin the A* search algorithm.");
     }
     
@@ -237,6 +243,7 @@ class EightQueensGUI {
         this.restartBtn = document.getElementById('restart-btn');
         this.statusMessage = document.getElementById('status-message');
         this.heuristicDisplay = document.getElementById('heuristic-display');
+        this.stepCounter = document.getElementById('step-counter');
         this.chessBoard = document.getElementById('chess-board');
         this.queenPositions = document.getElementById('queen-positions');
     }
@@ -322,6 +329,7 @@ class EightQueensGUI {
         
         this.updateSidePanel();
         this.updateHeuristicDisplay();
+        this.updateStepCounter();
         this.drawBoard();
         this.updateMessage(message);
         
@@ -342,6 +350,7 @@ class EightQueensGUI {
         
         this.updateSidePanel();
         this.updateHeuristicDisplay();
+        this.updateStepCounter();
         this.drawBoard();
         this.updateMessage(message);
         
@@ -365,6 +374,7 @@ class EightQueensGUI {
         
         this.updateSidePanel();
         this.updateHeuristicDisplay();
+        this.updateStepCounter();
         this.drawBoard();
         this.updateMessage("Search reset. Click 'Start' to begin the A* algorithm.");
     }
@@ -403,6 +413,10 @@ class EightQueensGUI {
     updateHeuristicDisplay() {
         const placedQueens = this.state.filter(c => c !== -1).length;
         this.heuristicDisplay.textContent = `Queens placed: ${placedQueens}/${BOARD_SIZE}`;
+    }
+    
+    updateStepCounter() {
+        this.stepCounter.textContent = `Algorithm steps: ${this.astarSearch.stepCount}`;
     }
     
     updateMessage(text) {
