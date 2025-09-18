@@ -7,7 +7,7 @@ Two complete implementations of the classic 8-Queens constraint satisfaction pro
 The 8-Queens problem challenges you to place 8 queens on a chessboard such that no two queens can attack each other (no shared rows, columns, or diagonals). This repository contains two different implementations of an A* search solution with interactive visualizations.
 
 ## Demo Video
-[[![Video](https://img.youtube.com/vi/TYTDRmb7u0w/maxresdefault.jpg)](https://www.youtube.com/watch?v=TYTDRmb7u0w)](https://github.com/user-attachments/assets/c79287d9-acf1-42da-83d1-b1bf64bca5e0)
+https://github.com/user-attachments/assets/cc714708-d1c7-4cf3-bb20-78d03d717de6
 
 ## Implementations
 
