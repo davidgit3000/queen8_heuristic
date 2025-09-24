@@ -88,6 +88,14 @@ h1 {
     gap: 15px;
 }
 
+/* Row containing board and controls to the right */
+.board-row {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 20px;
+}
+
 /* Chess Board */
 #chess-board {
     width: 480px;
@@ -158,7 +166,28 @@ h1 {
 /* Controls */
 .controls {
     display: flex;
-    gap: 5px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 200px; /* sidebar width next to board */
+}
+
+/* Mode selector */
+.mode-label {
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    font-weight: bold;
+    align-self: flex-start;
+}
+
+.mode-select {
+    padding: 6px 8px;
+    font-size: 11px;
+    background-color: #ffffff;
+    color: #000;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 100%;
 }
 
 .btn {
@@ -171,6 +200,7 @@ h1 {
     border: none;
     cursor: pointer;
     transition: background-color 0.2s;
+    width: 100%;
 }
 
 .btn:hover:not(:disabled) {
@@ -224,6 +254,20 @@ h1 {
     border: 1px solid #2c5aa0;
 }
 
+/* Status box and overrides to align widths with controls column */
+.status-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.controls .status-message,
+.controls .heuristic-display,
+.controls .step-counter {
+    width: 100%;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .main-content {
@@ -254,6 +298,12 @@ h1 {
         height: 24px;
     }
     
+    .board-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .controls,
     .status-message,
     .heuristic-display,
     .step-counter {

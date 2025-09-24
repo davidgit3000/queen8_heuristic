@@ -42,37 +42,52 @@
             <div class="left-panel">
                 <h2>Queen positions:</h2>
                 <div id="queen-positions">
-                    <!-- Will be populated by JavaScript -->
                 </div>
             </div>
             
             <!-- Right Panel: Board and Controls -->
             <div class="right-panel">
-                <!-- Chess Board -->
-                <div id="chess-board">
-                    <!-- Will be populated by JavaScript -->
-                </div>
-                
-                <!-- Control Buttons -->
-                <div class="controls">
-                    <button id="start-btn" class="btn">Start</button>
-                    <button id="next-btn" class="btn" disabled>Next Step</button>
-                    <button id="restart-btn" class="btn">Restart</button>
-                </div>
-                
-                <!-- Status Message -->
-                <div id="status-message" class="status-message">
-                    Click 'Start' to begin the A* search algorithm.
-                </div>
-                
-                <!-- Queens Counter Display -->
-                <div id="heuristic-display" class="heuristic-display">
-                    Queens placed: 0/8
-                </div>
-                
-                <!-- Step Counter Display -->
-                <div id="step-counter" class="step-counter">
-                    Algorithm steps: 0
+                <div class="board-row">
+                    <!-- Chess Board -->
+                    <div id="chess-board">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    
+                    <!-- Control Buttons -->
+                    <div class="controls">
+                        <label for="mode-select" class="mode-label">Mode:</label>
+                        <select id="mode-select" class="mode-select">
+                            <option value="deterministic" selected>Deterministic (8 steps)</option>
+                            <option value="astar">A* Frontier (no backtracking)</option>
+                        </select>
+                        <button id="start-btn" class="btn">Start</button>
+                        <button id="run-sim-btn" class="btn">Run simulation</button>
+                        <button id="pause-resume-btn" class="btn" disabled>Pause</button>
+                        <button id="next-btn" class="btn" disabled>Next Step</button>
+                        <label for="speed-select" class="mode-label">Speed:</label>
+                        <select id="speed-select" class="mode-select">
+                            <option value="400">Slow</option>
+                            <option value="150" selected>Normal</option>
+                            <option value="50">Fast</option>
+                        </select>
+                        <button id="restart-btn" class="btn">Restart</button>
+
+                        <!-- Grouped Status Box -->
+                        <div class="status-box">
+                            <div id="status-message" class="status-message">
+                                Click 'Start' to begin the A* search algorithm.
+                            </div>
+                            <div id="mode-indicator" class="heuristic-display">
+                                Mode: Deterministic (8 steps)
+                            </div>
+                            <div id="heuristic-display" class="heuristic-display">
+                                Queens placed: 0/8
+                            </div>
+                            <div id="step-counter" class="step-counter">
+                                Algorithm steps: 0
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Author -->

@@ -4,16 +4,32 @@ const BOARD_SIZE = 8;
 // A* Search Algorithm Class
 class StepByStepAStar {
     constructor() {
+        this.mode = 'deterministic'; // 'deterministic' | 'astar'
         this.reset();
     }
     
     reset() {
         this.currentState = new Array(BOARD_SIZE).fill(-1);
-        this.searchStack = []; // Stack for backtracking: [{state, row, triedColumns}]
-        this.currentRow = 0;
+        if (this.mode === 'astar') {
+            // Open list for A*: frontier of partial boards (no backtracking)
+            // Each node: { state, row, g, h, f }
+            const h0 = this.calculateFutureConflicts(this.currentState, 0);
+            this.openList = [{ state: [...this.currentState], row: 0, g: 0, h: h0, f: h0 }];
+        } else {
+            // Deterministic minimal-steps solution for 8-Queens (one queen per row)
+            // 0-indexed columns for rows 0..7; this is a known valid solution
+            this.fixedSolution = [0, 4, 7, 5, 2, 6, 1, 3];
+        }
+        this.currentRow = 0; // for UI highlighting and placement
         this.solved = false;
         this.stuck = false;
         this.stepCount = 0;
+    }
+    
+    setMode(mode) {
+        if (mode !== 'deterministic' && mode !== 'astar') return;
+        this.mode = mode;
+        this.reset();
     }
     
     getValidColumns(state, row) {
@@ -51,70 +67,94 @@ class StepByStepAStar {
         if (this.solved) {
             return [this.currentState, "Already solved!", true];
         }
-        
         if (this.stuck) {
             return [this.currentState, "Search failed - no solution found", true];
         }
-        
-        // Increment step counter for each algorithm iteration
+
+        // Increment step counter
         this.stepCount++;
-        
-        // If we've placed all queens, check if it's a valid solution
-        if (this.currentRow >= BOARD_SIZE) {
-            const h = this.attackingPairs(this.currentState);
-            if (h === 0) {
-                this.solved = true;
-                return [this.currentState, `Solution found!`, true];
-            } else {
-                this.currentRow -= 1;
-                return this.backtrack();
+        if (this.mode === 'deterministic') {
+            // If all rows placed, validate and finish
+            if (this.currentRow >= BOARD_SIZE) {
+                const h = this.attackingPairs(this.currentState);
+                if (h === 0) {
+                    this.solved = true;
+                    return [this.currentState, `Step ${this.stepCount}: Solution found!`, true];
+                } else {
+                    this.stuck = true;
+                    return [this.currentState, "Unexpected conflict at full placement.", true];
+                }
             }
-        }
-        
-        // Get valid columns for current row
-        const validCols = this.getValidColumns(this.currentState, this.currentRow);
-        
-        if (validCols.length === 0) {
-            return this.backtrack();
-        }
-        
-        // Choose the best column using heuristic
-        const bestCol = this.chooseBestColumn(validCols);
-        
-        // Save current state for potential backtracking
-        const triedCols = new Set([bestCol]);
-        this.searchStack.push({
-            state: [...this.currentState],
-            row: this.currentRow,
-            triedColumns: triedCols
-        });
-        
-        // Place queen
-        this.currentState[this.currentRow] = bestCol;
-        
-        const message = `Step ${this.stepCount}: Placed queen at row ${this.currentRow}, col ${bestCol}.`;
-        this.currentRow += 1;
-        
-        return [this.currentState, message, false];
-    }
-    
-    chooseBestColumn(validCols) {
-        let bestCol = validCols[0];
-        let bestH = Infinity;
-        
-        for (const col of validCols) {
-            const tempState = [...this.currentState];
-            tempState[this.currentRow] = col;
+
+            // Deterministic placement from a known valid solution
+            const col = this.fixedSolution[this.currentRow];
+            this.currentState[this.currentRow] = col;
+            const message = `Step ${this.stepCount}: Placed queen at row ${this.currentRow}, col ${col}.`;
+            this.currentRow += 1;
             
-            const h = this.calculateFutureConflicts(tempState, this.currentRow + 1);
-            
-            if (h < bestH) {
-                bestH = h;
-                bestCol = col;
+            // If this was the last placement, validate immediately and finish
+            const done = (this.currentRow === BOARD_SIZE);
+            if (done) {
+                const h = this.attackingPairs(this.currentState);
+                if (h === 0) {
+                    this.solved = true;
+                    return [this.currentState, `Step ${this.stepCount}: Solution found!`, true];
+                } else {
+                    this.stuck = true;
+                    return [this.currentState, "Unexpected conflict at full placement.", true];
+                }
             }
+
+            return [this.currentState, message, false];
+        } else {
+            // A* frontier (no backtracking)
+            if (this.openList.length === 0) {
+                this.stuck = true;
+                return [this.currentState, "Frontier exhausted. No solution found (no backtracking).", true];
+            }
+
+            // Select node with smallest f from open list
+            this.openList.sort((a, b) => a.f - b.f);
+            const node = this.openList.shift();
+
+            // Update current state for visualization
+            this.currentState = [...node.state];
+            this.currentRow = node.row;
+
+            // Goal test
+            if (node.row >= BOARD_SIZE) {
+                if (this.attackingPairs(node.state) === 0) {
+                    this.solved = true;
+                    return [this.currentState, `Step ${this.stepCount}: Solution found!`, true];
+                }
+            }
+
+            // Expand children
+            const validCols = this.getValidColumns(node.state, node.row);
+            if (validCols.length === 0) {
+                return [this.currentState, `Step ${this.stepCount}: Dead end at row ${node.row}. Exploring other candidates...`, false];
+            }
+
+            const children = [];
+            for (const col of validCols) {
+                const childState = [...node.state];
+                childState[node.row] = col;
+                const g = node.row + 1;
+                const h = this.calculateFutureConflicts(childState, node.row + 1);
+                const f = g + h;
+                const child = { state: childState, row: node.row + 1, g, h, f };
+                children.push(child);
+                this.openList.push(child);
+            }
+
+            children.sort((a, b) => a.f - b.f);
+            const bestChild = children[0];
+            this.currentState = [...bestChild.state];
+            this.currentRow = bestChild.row;
+            const placedCol = bestChild.state[bestChild.row - 1];
+            const message = `Step ${this.stepCount}: Expanded row ${node.row}, placed queen at col ${placedCol}. Open list size: ${this.openList.length}`;
+            return [this.currentState, message, false];
         }
-        
-        return bestCol;
     }
     
     calculateFutureConflicts(state, fromRow) {
@@ -154,37 +194,6 @@ class StepByStepAStar {
         }
         
         return conflicts;
-    }
-    
-    backtrack() {
-        while (this.searchStack.length > 0) {
-            const {state: prevState, row: prevRow, triedColumns: triedCols} = this.searchStack.pop();
-            
-            const validCols = this.getValidColumns(prevState, prevRow);
-            const untriedCols = validCols.filter(c => !triedCols.has(c));
-            
-            if (untriedCols.length > 0) {
-                const bestCol = this.chooseBestColumn(untriedCols);
-                triedCols.add(bestCol);
-                this.searchStack.push({
-                    state: prevState,
-                    row: prevRow,
-                    triedColumns: triedCols
-                });
-                
-                // Place queen
-                this.currentState = [...prevState];
-                this.currentState[prevRow] = bestCol;
-                this.currentRow = prevRow + 1;
-                
-                const message = `Step ${this.stepCount}: Backtracked to row ${prevRow}, trying col ${bestCol}.`;
-                return [this.currentState, message, false];
-            }
-        }
-        
-        // No more options to try
-        this.stuck = true;
-        return [this.currentState, "Search failed - no solution exists", true];
     }
     
     // Heuristic function to count attacking pairs
@@ -227,6 +236,8 @@ class EightQueensGUI {
         this.astarSearch = new StepByStepAStar();
         this.state = [...this.astarSearch.currentState];
         this.searchStarted = false;
+        this.simulationTimer = null;
+        this.isPaused = false;
         
         this.initializeElements();
         this.setupEventListeners();
@@ -234,6 +245,7 @@ class EightQueensGUI {
         this.updateSidePanel();
         this.updateHeuristicDisplay();
         this.updateStepCounter();
+        this.updateModeIndicator();
         this.updateMessage("Click 'Start' to begin the A* search algorithm.");
     }
     
@@ -241,7 +253,12 @@ class EightQueensGUI {
         this.startBtn = document.getElementById('start-btn');
         this.nextBtn = document.getElementById('next-btn');
         this.restartBtn = document.getElementById('restart-btn');
+        this.runSimBtn = document.getElementById('run-sim-btn');
+        this.modeSelect = document.getElementById('mode-select');
+        this.pauseResumeBtn = document.getElementById('pause-resume-btn');
+        this.speedSelect = document.getElementById('speed-select');
         this.statusMessage = document.getElementById('status-message');
+        this.modeIndicator = document.getElementById('mode-indicator');
         this.heuristicDisplay = document.getElementById('heuristic-display');
         this.stepCounter = document.getElementById('step-counter');
         this.chessBoard = document.getElementById('chess-board');
@@ -252,6 +269,103 @@ class EightQueensGUI {
         this.startBtn.addEventListener('click', () => this.startSearch());
         this.nextBtn.addEventListener('click', () => this.nextStep());
         this.restartBtn.addEventListener('click', () => this.restart());
+        if (this.runSimBtn) {
+            this.runSimBtn.addEventListener('click', () => this.runSimulation());
+        }
+        if (this.pauseResumeBtn) {
+            this.pauseResumeBtn.addEventListener('click', () => this.togglePauseResume());
+        }
+        if (this.modeSelect) {
+            this.modeSelect.addEventListener('change', () => this.onModeChange());
+        }
+        if (this.speedSelect) {
+            this.speedSelect.addEventListener('change', () => this.onSpeedChange());
+        }
+    }
+
+    onModeChange() {
+        const mode = this.modeSelect.value === 'astar' ? 'astar' : 'deterministic';
+        // Apply mode to algorithm (this will reset internal state)
+        this.astarSearch.setMode(mode);
+        // Sync local state and UI
+        this.state = [...this.astarSearch.currentState];
+        this.searchStarted = false;
+        this.startBtn.disabled = false;
+        this.nextBtn.disabled = true;
+        if (this.pauseResumeBtn) {
+            this.pauseResumeBtn.disabled = true;
+            this.pauseResumeBtn.textContent = 'Pause';
+        }
+        this.updateSidePanel();
+        this.updateHeuristicDisplay();
+        this.updateStepCounter();
+        this.drawBoard();
+        const modeLabel = mode === 'deterministic' ? 'Deterministic (8 steps)' : 'A* Frontier (no backtracking)';
+        this.updateMessage(`Mode changed to ${modeLabel}. Click 'Start' to begin.`);
+        this.updateModeIndicator();
+    }
+
+    updateModeIndicator() {
+        if (!this.modeIndicator) return;
+        const mode = this.astarSearch.mode;
+        const modeLabel = mode === 'deterministic' ? 'Deterministic (8 steps)' : 'A* Frontier (no backtracking)';
+        this.modeIndicator.textContent = `Mode: ${modeLabel}`;
+    }
+
+    getSimulationDelay() {
+        if (!this.speedSelect) return 150;
+        const v = parseInt(this.speedSelect.value, 10);
+        return Number.isFinite(v) ? v : 150;
+    }
+
+    onSpeedChange() {
+        // If simulation is running and not paused, restart the interval with new speed
+        if (this.simulationTimer && !this.isPaused) {
+            this.stopSimulationTimer();
+            this.startSimulationTimer();
+        }
+    }
+
+    startSimulationTimer() {
+        const delay = this.getSimulationDelay();
+        this.simulationTimer = setInterval(() => {
+            const [newState, message, isComplete] = this.astarSearch.nextStep();
+            this.state = [...newState];
+            this.updateSidePanel();
+            this.updateHeuristicDisplay();
+            this.updateStepCounter();
+            this.drawBoard();
+            this.updateMessage(message);
+
+            if (isComplete) {
+                this.stopSimulationTimer();
+                this.nextBtn.disabled = true;
+                if (this.runSimBtn) {
+                    this.runSimBtn.disabled = false;
+                    this.runSimBtn.textContent = 'Run simulation';
+                }
+                if (this.modeSelect) {
+                    this.modeSelect.disabled = false;
+                }
+                if (this.pauseResumeBtn) {
+                    this.pauseResumeBtn.disabled = true;
+                    this.pauseResumeBtn.textContent = 'Pause';
+                }
+                // Ensure final message clarity
+                if (this.astarSearch.solved) {
+                    this.updateMessage('Solution found! All queens placed without conflicts.');
+                } else {
+                    this.updateMessage('Search failed - no solution found.');
+                }
+            }
+        }, delay);
+    }
+
+    stopSimulationTimer() {
+        if (this.simulationTimer) {
+            clearInterval(this.simulationTimer);
+            this.simulationTimer = null;
+        }
     }
     
     drawBoard() {
@@ -322,6 +436,9 @@ class EightQueensGUI {
         this.searchStarted = true;
         this.startBtn.disabled = true;
         this.nextBtn.disabled = false;
+        if (this.modeSelect) {
+            this.modeSelect.disabled = true; // disable mode switching during manual run
+        }
         
         // Immediately perform the first step
         const [newState, message, isComplete] = this.astarSearch.nextStep();
@@ -340,6 +457,9 @@ class EightQueensGUI {
             } else {
                 this.nextBtn.disabled = true;
                 this.updateMessage("Search failed - no solution found.");
+            }
+            if (this.modeSelect) {
+                this.modeSelect.disabled = false;
             }
         }
     }
@@ -362,6 +482,9 @@ class EightQueensGUI {
                 this.nextBtn.disabled = true;
                 this.updateMessage("Search failed - no solution found.");
             }
+            if (this.modeSelect) {
+                this.modeSelect.disabled = false;
+            }
         }
     }
     
@@ -371,12 +494,74 @@ class EightQueensGUI {
         this.searchStarted = false;
         this.startBtn.disabled = false;
         this.nextBtn.disabled = true;
+        this.stopSimulationTimer();
+        this.isPaused = false;
+        if (this.runSimBtn) {
+            this.runSimBtn.disabled = false;
+            this.runSimBtn.textContent = 'Run simulation';
+        }
+        if (this.modeSelect) {
+            this.modeSelect.disabled = false;
+        }
+        if (this.pauseResumeBtn) {
+            this.pauseResumeBtn.disabled = true;
+            this.pauseResumeBtn.textContent = 'Pause';
+        }
         
         this.updateSidePanel();
         this.updateHeuristicDisplay();
         this.updateStepCounter();
         this.drawBoard();
+        this.updateModeIndicator();
         this.updateMessage("Search reset. Click 'Start' to begin the A* algorithm.");
+    }
+
+    runSimulation() {
+        // Ensure mode is A* frontier
+        if (this.modeSelect && this.modeSelect.value !== 'astar') {
+            this.modeSelect.value = 'astar';
+            this.onModeChange();
+        } else {
+            // If already in astar mode, reset to fresh state if not started
+            if (!this.searchStarted) {
+                this.astarSearch.setMode('astar');
+                this.state = [...this.astarSearch.currentState];
+            }
+        }
+
+        this.searchStarted = true;
+        this.startBtn.disabled = true;
+        this.nextBtn.disabled = true;
+        if (this.runSimBtn) {
+            this.runSimBtn.disabled = true;
+            this.runSimBtn.textContent = 'Running...';
+        }
+        if (this.modeSelect) {
+            this.modeSelect.disabled = true;
+        }
+        if (this.pauseResumeBtn) {
+            this.pauseResumeBtn.disabled = false;
+            this.pauseResumeBtn.textContent = 'Pause';
+        }
+        this.isPaused = false;
+        this.stopSimulationTimer();
+        this.startSimulationTimer();
+    }
+
+    togglePauseResume() {
+        if (!this.pauseResumeBtn) return;
+        if (!this.simulationTimer && !this.isPaused) return; // nothing to pause
+        if (this.isPaused) {
+            // Resume
+            this.isPaused = false;
+            this.pauseResumeBtn.textContent = 'Pause';
+            this.startSimulationTimer();
+        } else {
+            // Pause
+            this.isPaused = true;
+            this.pauseResumeBtn.textContent = 'Resume';
+            this.stopSimulationTimer();
+        }
     }
     
     updateSidePanel() {
