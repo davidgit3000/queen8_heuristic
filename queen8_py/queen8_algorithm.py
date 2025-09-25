@@ -1,5 +1,4 @@
-import heapq
-from typing import List, Tuple, Dict, Set
+from typing import List, Tuple
 
 # ---------------------------- Board constants ---------------------------- #
 BOARD_SIZE = 8
@@ -28,15 +27,29 @@ def attacking_pairs(state: Tuple[int, ...]) -> int:
 
 class StepByStepAStar:
     def __init__(self):
+        self.mode = 'deterministic'  # 'deterministic' | 'astar'
         self.reset()
-    
+
+    def set_mode(self, mode: str):
+        if mode not in ('deterministic', 'astar'):
+            return
+        self.mode = mode
+        self.reset()
+
     def reset(self):
         """Reset the search to start from beginning"""
         self.current_state = tuple([-1] * BOARD_SIZE)
-        self.search_stack = []  # Stack for backtracking: [(state, row, tried_columns)]
         self.current_row = 0
         self.solved = False
         self.stuck = False
+        self.step_count = 0
+        if self.mode == 'astar':
+            # Open list frontier: each node is (f, g, state, row)
+            h0 = self.calculate_future_conflicts(self.current_state, 0)
+            self.open_list: List[Tuple[int, int, Tuple[int, ...], int]] = [(h0, 0, self.current_state, 0)]
+        else:
+            # Known valid solution: one queen per row
+            self.fixed_solution: List[int] = [0, 4, 7, 5, 2, 6, 1, 3]
     
     def get_valid_columns(self, state: Tuple[int, ...], row: int) -> List[int]:
         """Get all valid columns for placing a queen in the given row"""
@@ -67,66 +80,83 @@ class StepByStepAStar:
         return valid_cols
     
     def next_step(self) -> Tuple[Tuple[int, ...], str, bool]:
-        """Perform one step of the A* search. Returns (new_state, message, is_complete)"""
+        """Perform one step of the search based on mode. Returns (new_state, message, is_complete)"""
         if self.solved:
             return self.current_state, "Already solved!", True
-        
         if self.stuck:
             return self.current_state, "Search failed - no solution found", True
-        
-        # If we've placed all queens, check if it's a valid solution
-        if self.current_row >= BOARD_SIZE:
-            h = attacking_pairs(self.current_state)
-            if h == 0:
-                self.solved = True
-                return self.current_state, f"Solution found! h(n) = {h}", True
-            else:
-                # This shouldn't happen with our constraint checking, but just in case
-                self.current_row -= 1
-                return self.backtrack()
-        
-        # Get valid columns for current row
-        valid_cols = self.get_valid_columns(self.current_state, self.current_row)
-        
+
+        self.step_count += 1
+
+        if self.mode == 'deterministic':
+            # If all rows placed, validate and finish
+            if self.current_row >= BOARD_SIZE:
+                h = attacking_pairs(self.current_state)
+                if h == 0:
+                    self.solved = True
+                    return self.current_state, f"Step {self.step_count}: Solution found!", True
+                else:
+                    self.stuck = True
+                    return self.current_state, "Unexpected conflict at full placement.", True
+
+            col = self.fixed_solution[self.current_row]
+            new_state = list(self.current_state)
+            new_state[self.current_row] = col
+            self.current_state = tuple(new_state)
+            msg = f"Step {self.step_count}: Placed queen at row {self.current_row}, col {col}."
+            self.current_row += 1
+            if self.current_row == BOARD_SIZE:
+                h = attacking_pairs(self.current_state)
+                if h == 0:
+                    self.solved = True
+                    return self.current_state, f"Step {self.step_count}: Solution found!", True
+                else:
+                    self.stuck = True
+                    return self.current_state, "Unexpected conflict at full placement.", True
+            return self.current_state, msg, False
+
+        # A* frontier (no backtracking)
+        if not self.open_list:
+            self.stuck = True
+            return self.current_state, "Frontier exhausted. No solution found (no backtracking).", True
+
+        # pop node with smallest f
+        self.open_list.sort(key=lambda x: x[0])
+        f, g, state, row = self.open_list.pop(0)
+        self.current_state = state
+        self.current_row = row
+
+        if row >= BOARD_SIZE and attacking_pairs(state) == 0:
+            self.solved = True
+            return self.current_state, f"Step {self.step_count}: Solution found!", True
+
+        valid_cols = self.get_valid_columns(state, row)
         if not valid_cols:
-            # No valid moves, need to backtrack
-            return self.backtrack()
-        
-        # Choose the best column using heuristic (A* approach)
-        best_col = self.choose_best_column(valid_cols)
-        
-        # Save current state for potential backtracking
-        tried_cols = {best_col}
-        self.search_stack.append((self.current_state, self.current_row, tried_cols))
-        
-        # Place queen
-        new_state = list(self.current_state)
-        new_state[self.current_row] = best_col
-        self.current_state = tuple(new_state)
-        
-        message = f"Placed queen at row {self.current_row}, col {best_col}. h(n) = {attacking_pairs(self.current_state)}"
-        self.current_row += 1
-        
-        return self.current_state, message, False
-    
-    def choose_best_column(self, valid_cols: List[int]) -> int:
-        """Choose the best column using A* heuristic (lowest h value)"""
-        best_col = valid_cols[0]
-        best_h = float('inf')
-        
+            return self.current_state, f"Step {self.step_count}: Dead end at row {row}. Exploring other candidates...", False
+
+        children: List[Tuple[int, int, Tuple[int, ...], int]] = []
         for col in valid_cols:
-            # Create temporary state
-            temp_state = list(self.current_state)
-            temp_state[self.current_row] = col
-            
-            # Calculate heuristic (future conflicts)
-            h = self.calculate_future_conflicts(tuple(temp_state), self.current_row + 1)
-            
-            if h < best_h:
-                best_h = h
-                best_col = col
-        
-        return best_col
+            child_state = list(state)
+            child_state[row] = col
+            child_state_t = tuple(child_state)
+            g_child = row + 1
+            h_child = self.calculate_future_conflicts(child_state_t, row + 1)
+            f_child = g_child + h_child
+            node = (f_child, g_child, child_state_t, row + 1)
+            children.append(node)
+            self.open_list.append(node)
+
+        # For visualization choose best child to display now
+        children.sort(key=lambda x: x[0])
+        best = children[0]
+        _, _, best_state, best_row = best
+        placed_col = [c for c in range(BOARD_SIZE) if best_state[best_row - 1] == c][0]
+        self.current_state = best_state
+        self.current_row = best_row
+        msg = f"Step {self.step_count}: Expanded row {row}, placed queen at col {placed_col}. Open list size: {len(self.open_list)}"
+        return self.current_state, msg, False
+    
+    # Note: choose_best_column/backtrack removed in new modes. Kept get_valid_columns for constraint filtering.
     
     def calculate_future_conflicts(self, state: Tuple[int, ...], from_row: int) -> int:
         """Calculate potential future conflicts for remaining rows"""
@@ -154,30 +184,4 @@ class StepByStepAStar:
         
         return conflicts
     
-    def backtrack(self) -> Tuple[Tuple[int, ...], str, bool]:
-        """Backtrack to previous state and try next option"""
-        while self.search_stack:
-            prev_state, prev_row, tried_cols = self.search_stack.pop()
-            
-            # Get valid columns for this row
-            valid_cols = self.get_valid_columns(prev_state, prev_row)
-            untried_cols = [c for c in valid_cols if c not in tried_cols]
-            
-            if untried_cols:
-                # Found an untried option
-                best_col = self.choose_best_column(untried_cols)
-                tried_cols.add(best_col)
-                self.search_stack.append((prev_state, prev_row, tried_cols))
-                
-                # Place queen
-                new_state = list(prev_state)
-                new_state[prev_row] = best_col
-                self.current_state = tuple(new_state)
-                self.current_row = prev_row + 1
-                
-                message = f"Backtracked to row {prev_row}, trying col {best_col}. h(n) = {attacking_pairs(self.current_state)}"
-                return self.current_state, message, False
-        
-        # No more options to try
-        self.stuck = True
-        return self.current_state, "Search failed - no solution exists", True
+    # backtrack removed (no backtracking in either mode)
